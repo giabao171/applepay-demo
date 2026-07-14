@@ -80,7 +80,7 @@ export const useApplePay = ({ isLoadingCart, applePayJsUrl, magentoWebsiteCode }
 
     const session = new (window as any).ApplePaySession(3, paymentRequest);
 
-    session.onvalidatemerchant = async (event: any) => {
+    session.onvalidatemerchant = async () => {
       try {
         const form = new FormData();
         form.set('additional_input', JSON.stringify(input));
