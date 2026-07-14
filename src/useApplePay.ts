@@ -29,33 +29,6 @@ export const useApplePay = ({ isLoadingCart, applePayJsUrl, magentoWebsiteCode }
     });
   }, [applePayJsUrl]);
 
-//   const handleApplePayApproval = useCallback((applePayResult: ApplePayResult, input: any, session: any) => {
-//     const parameter = new FormData();
-//     parameter.set('additional_input', JSON.stringify(input));
-//     parameter.set('apple_pay_token', JSON.stringify(applePayResult.token));
-    
-//     fetch(`${storeUrl}/kec/applepay/updateQuoteAddress`, {
-//       method: 'POST',
-//       headers: { 'Accept': 'application/json' },
-//       body: parameter,
-//       cache: 'no-cache'
-//     })
-//     .then(response => response.json())
-//     .then(data => {
-//       if (data.status !== 200) {
-//         alert('Failure processing Apple Pay payment.');
-//         session.completePayment((window as any).ApplePaySession.STATUS_FAILURE);
-//       } else {
-//         session.completePayment((window as any).ApplePaySession.STATUS_SUCCESS);
-//         window.location.replace(`${storeUrl}/checkout/onepage/success`);
-//       }
-//     })
-//     .catch(() => {
-//       alert('Error processing Apple Pay payment.');
-//       session.completePayment((window as any).ApplePaySession.STATUS_FAILURE);
-//     });
-//   }, [storeUrl]);
-
   const handleApplePayClick = useCallback(() => {
     if (!(window as any).ApplePaySession) {
       alert('Apple Pay is not supported on this device/browser.');
@@ -67,51 +40,27 @@ export const useApplePay = ({ isLoadingCart, applePayJsUrl, magentoWebsiteCode }
       country_id: magentoWebsiteCode,
     };
 
+    // Đảm bảo request có yêu cầu thông tin giao hàng nếu bạn muốn trigger onshippingcontactselected
     const paymentRequest = {
       countryCode: magentoWebsiteCode,
       currencyCode: "USD",
       supportedNetworks: ['visa', 'masterCard', 'amex'],
       merchantCapabilities: ['supports3DS'],
+      requiredShippingContactFields: ['postalAddress', 'name', 'phone', 'email'], // Thêm dòng này để lấy thông tin giao hàng
       total: {
         label: 'Magento Store',
-        amount: '0.00' // Giá trị tạm, sẽ update thực tế tại onvalidatemerchant
+        amount: '10.00' // Nên set giá trị khởi điểm thực tế ở đây thay vì '0.00'
       }
     };
 
     const session = new (window as any).ApplePaySession(3, paymentRequest);
 
+    // 1. CHỈ XỬ LÝ XÁC THỰC MERCHANT TẠI ĐÂY
     session.onvalidatemerchant = async (event: any) => {
       try {
         console.log(event.validationURL);
-        const form = new FormData();
-        form.set('additional_input', JSON.stringify(input));
-        
-        // MOCK GIÁ TRỊ KHI TEST TRÊN GITHUB/VERCEL KHÔNG CÓ SERVER MAGENTO
-        // Khi deploy thực tế, bạn mở comment dòng fetch này ra
-        /*
-        const cartData = await fetch(`${storeUrl}/checkout/applepay/getPayLoad`, {
-          method: 'POST',
-          body: form
-        }).then(res => res.json());
-        */
-        const cartData = { grand_total: '10.00' }; // Giá trị giả lập để test
 
-        session.completeShippingContactSelection(
-          (window as any).ApplePaySession.STATUS_SUCCESS,
-          [], 
-          { label: 'Magento Store', amount: cartData.grand_total }, 
-          []
-        );
-
-        // MOCK MERCHANT SESSION ĐỂ BẬT ĐƯỢC BẢNG QUÉT VÂN TAY TRÊN LINK HTTPS TEST
-        /*
-        const validationForm = new FormData();
-        validationForm.set('validation_url', event.validationURL);
-        const merchantSession = await fetch(`${storeUrl}/checkout/applepay/validateMerchant`, {
-          method: 'POST',
-          body: validationForm
-        }).then(res => res.json());
-        */
+        // MOCK MERCHANT SESSION ĐỂ BẬT ĐƯỢC BẢNG TRÊN LINK HTTPS TEST
         const mockMerchantSession = {
           epochTimestamp: Date.now(),
           expiresAt: Date.now() + 3600000,
@@ -123,6 +72,16 @@ export const useApplePay = ({ isLoadingCart, applePayJsUrl, magentoWebsiteCode }
           signature: "mock_signature"
         };
 
+        // Thực tế deploy:
+        /*
+        const validationForm = new FormData();
+        validationForm.set('validation_url', event.validationURL);
+        const mockMerchantSession = await fetch(`${storeUrl}/checkout/applepay/validateMerchant`, {
+          method: 'POST',
+          body: validationForm
+        }).then(res => res.json());
+        */
+
         session.completeMerchantValidation(mockMerchantSession);
 
       } catch (error) {
@@ -131,10 +90,47 @@ export const useApplePay = ({ isLoadingCart, applePayJsUrl, magentoWebsiteCode }
       }
     };
 
+    // 2. DI CHUYỂN HÀM completeShippingContactSelection VỀ ĐÚNG SỰ KIỆN NÀY
+    session.onshippingcontactselected = async (event: any) => {
+      try {
+        const form = new FormData();
+        form.set('additional_input', JSON.stringify(input));
+        form.set('shipping_address', JSON.stringify(event.shippingContact));
+
+        // Mock dữ liệu giỏ hàng sau khi tính toán phí vận chuyển mới
+        const cartData = { grand_total: '12.50' }; 
+
+        /* Thực tế deploy:
+        const cartData = await fetch(`${storeUrl}/checkout/applepay/getPayLoad`, {
+          method: 'POST',
+          body: form
+        }).then(res => res.json());
+        */
+
+        // Các tham số truyền vào: Status, Shipping Methods, New Total, Line Items
+        session.completeShippingContactSelection(
+          (window as any).ApplePaySession.STATUS_SUCCESS,
+          [], // Các phương thức vận chuyển khả dụng (nếu có)
+          { label: 'Magento Store', amount: cartData.grand_total }, 
+          []  // Các dòng chi tiết hóa đơn (Line items)
+        );
+      } catch (error) {
+        console.error(error);
+        session.completeShippingContactSelection(
+          (window as any).ApplePaySession.STATUS_FAILURE,
+          [],
+          { label: 'Magento Store', amount: '0.00' },
+          []
+        );
+      }
+    };
+
+    // 3. XÁC NHẬN THANH TOÁN
     session.onpaymentauthorized = (event: any) => {
       const result: ApplePayResult = { token: event.payment.token };
-      // Giả lập xử lý backend khi test trên Vercel
       console.log('Token từ Apple:', result.token);
+      
+      // Giả lập xử lý backend thành công
       session.completePayment((window as any).ApplePaySession.STATUS_SUCCESS);
       alert('Thanh toán thành công (Môi trường Test)!');
     };
@@ -147,9 +143,6 @@ export const useApplePay = ({ isLoadingCart, applePayJsUrl, magentoWebsiteCode }
 
     const initializeApplePay = async () => {
       try {
-        // const isAppleDevice = /Macintosh|iPhone|iPad|iPod/.test(navigator.userAgent);
-        // if (!isAppleDevice) return;
-
         await loadApplePayScript();
         
         if (!(window as any).ApplePaySession || !(window as any).ApplePaySession.canMakePayments()) {
@@ -164,7 +157,7 @@ export const useApplePay = ({ isLoadingCart, applePayJsUrl, magentoWebsiteCode }
         const btn = document.createElement('button');
         btn.style.appearance = '-apple-pay-button';
         btn.style.width = '100%';
-        btn.style.height = '48px'; // Tăng lên 48px chuẩn Apple
+        btn.style.height = '48px';
         btn.style.cursor = 'pointer';
         btn.onclick = handleApplePayClick;
 
