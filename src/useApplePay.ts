@@ -29,32 +29,32 @@ export const useApplePay = ({ isLoadingCart, applePayJsUrl, magentoWebsiteCode }
     });
   }, [applePayJsUrl]);
 
-  const handleApplePayApproval = useCallback((applePayResult: ApplePayResult, input: any, session: any) => {
-    const parameter = new FormData();
-    parameter.set('additional_input', JSON.stringify(input));
-    parameter.set('apple_pay_token', JSON.stringify(applePayResult.token));
+//   const handleApplePayApproval = useCallback((applePayResult: ApplePayResult, input: any, session: any) => {
+//     const parameter = new FormData();
+//     parameter.set('additional_input', JSON.stringify(input));
+//     parameter.set('apple_pay_token', JSON.stringify(applePayResult.token));
     
-    fetch(`${storeUrl}/kec/applepay/updateQuoteAddress`, {
-      method: 'POST',
-      headers: { 'Accept': 'application/json' },
-      body: parameter,
-      cache: 'no-cache'
-    })
-    .then(response => response.json())
-    .then(data => {
-      if (data.status !== 200) {
-        alert('Failure processing Apple Pay payment.');
-        session.completePayment((window as any).ApplePaySession.STATUS_FAILURE);
-      } else {
-        session.completePayment((window as any).ApplePaySession.STATUS_SUCCESS);
-        window.location.replace(`${storeUrl}/checkout/onepage/success`);
-      }
-    })
-    .catch(() => {
-      alert('Error processing Apple Pay payment.');
-      session.completePayment((window as any).ApplePaySession.STATUS_FAILURE);
-    });
-  }, [storeUrl]);
+//     fetch(`${storeUrl}/kec/applepay/updateQuoteAddress`, {
+//       method: 'POST',
+//       headers: { 'Accept': 'application/json' },
+//       body: parameter,
+//       cache: 'no-cache'
+//     })
+//     .then(response => response.json())
+//     .then(data => {
+//       if (data.status !== 200) {
+//         alert('Failure processing Apple Pay payment.');
+//         session.completePayment((window as any).ApplePaySession.STATUS_FAILURE);
+//       } else {
+//         session.completePayment((window as any).ApplePaySession.STATUS_SUCCESS);
+//         window.location.replace(`${storeUrl}/checkout/onepage/success`);
+//       }
+//     })
+//     .catch(() => {
+//       alert('Error processing Apple Pay payment.');
+//       session.completePayment((window as any).ApplePaySession.STATUS_FAILURE);
+//     });
+//   }, [storeUrl]);
 
   const handleApplePayClick = useCallback(() => {
     if (!(window as any).ApplePaySession) {
